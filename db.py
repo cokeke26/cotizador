@@ -3,29 +3,52 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from typing import Sequence
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
-import psycopg2
-import psycopg2.extras
+import psycopg
 import streamlit as st
 
 from utils import QuoteItem
 
 
 def _get_database_url() -> str:
+    """
+    Lee DATABASE_URL desde st.secrets.
+    Debe ser una URL tipo:
+    postgresql://postgres:<PASSWORD>@...:5432/postgres
+    """
     url = st.secrets.get("DATABASE_URL")
     if not url:
         raise RuntimeError("Falta DATABASE_URL en st.secrets")
-    return url
+    return str(url).strip()
 
 
-def get_conn():
-    # Supabase normalmente requiere SSL
-    return psycopg2.connect(_get_database_url())
+def _with_sslmode_require(url: str) -> str:
+    """
+    Supabase requiere SSL. Si la URL no trae sslmode, se lo agregamos.
+    """
+    parsed = urlparse(url)
+    q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    if "sslmode" not in q:
+        q["sslmode"] = "require"
+    new_query = urlencode(q)
+    return urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
+    )
+
+
+def get_conn() -> psycopg.Connection:
+    """
+    Abre conexión a PostgreSQL (Supabase) con SSL.
+    """
+    dsn = _with_sslmode_require(_get_database_url())
+    return psycopg.connect(dsn)
 
 
 def next_quote_number(year: int) -> tuple[int, str]:
     """
     Obtiene el siguiente correlativo del año de forma atómica (sin duplicados).
+    Retorna (seq, "YYYY-0001").
     """
     sql = """
     insert into quote_counters(year, last_seq)
@@ -34,10 +57,17 @@ def next_quote_number(year: int) -> tuple[int, str]:
     do update set last_seq = quote_counters.last_seq + 1
     returning last_seq;
     """
+
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (year,))
-            seq = int(cur.fetchone()[0])
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError("No se pudo obtener el correlativo (fetchone vacío).")
+            seq = int(row[0])
+
+        # psycopg v3: si no hay error, al salir del with se confirma automáticamente.
+        # Igual lo dejamos explícito para que sea claro:
         conn.commit()
 
     quote_number = f"{year}-{seq:04d}"
@@ -65,8 +95,12 @@ def insert_quote(
     Inserta cotización + items en una transacción.
     Retorna quote_id.
     """
+    if not items:
+        raise ValueError("No puedes guardar una cotización sin ítems.")
+
     with get_conn() as conn:
         with conn.cursor() as cur:
+            # 1) Insert cabecera
             cur.execute(
                 """
                 insert into quotes(
@@ -79,23 +113,37 @@ def insert_quote(
                 returning id;
                 """,
                 (
-                    year, seq, quote_number, issue_date,
-                    brand_name, brand_email, brand_phone,
-                    client_name, client_email, client_company,
-                    discount_pct, notes, validity_days
+                    year,
+                    seq,
+                    quote_number,
+                    issue_date,
+                    brand_name,
+                    brand_email,
+                    brand_phone,
+                    client_name,
+                    client_email,
+                    client_company,
+                    discount_pct,
+                    notes,
+                    validity_days,
                 ),
             )
-            quote_id = int(cur.fetchone()[0])
+            row = cur.fetchone()
+            if not row:
+                raise RuntimeError("No se pudo insertar la cotización (fetchone vacío).")
+            quote_id = int(row[0])
 
-            psycopg2.extras.execute_values(
-                cur,
+            # 2) Insert items (executemany)
+            rows = [(quote_id, it.description, it.qty, it.unit_price) for it in items]
+            cur.executemany(
                 """
                 insert into quote_items(quote_id, description, qty, unit_price)
-                values %s
+                values (%s, %s, %s, %s)
                 """,
-                [(quote_id, it.description, it.qty, it.unit_price) for it in items],
+                rows,
             )
 
         conn.commit()
 
     return quote_id
+
