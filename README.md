@@ -51,7 +51,9 @@ DATABASE_URL = "postgresql://USER:PASSWORD@HOST:PUERTO/DB?sslmode=require"
 APP_PASSWORD: contraseña para acceder a la app
 DATABASE_URL: Database password de Supabase (no la de login)
 
-🗄️ Base de datos (Supabase)
+```
+
+## 🗄️ Base de datos (Supabase)
 
 Tablas requeridas:
 
@@ -63,23 +65,25 @@ Tablas requeridas:
 
 El sistema usa una tabla quote_counters para generar el número de cotización de forma automática y segura.
 
-▶️ Ejecución en local
+## ▶️ Ejecución en local
 
-1️⃣ Crear y activar entorno virtual
-
+### 1️⃣ Crear y activar entorno virtual
+```
 python -m venv venv
 venv\Scripts\activate     # Windows
-# source venv/bin/activate  # Linux / macOS
+ source venv/bin/activate  Linux / macOS
+```
 
-2️⃣ Instalar dependencias
-
+### 2️⃣ Instalar dependencias
+```
 pip install -r requirements.txt
+```
 
-3️⃣ Ejecutar la aplicación
-
+### 3️⃣ Ejecutar la aplicación
+```
 python -m streamlit run app.py
-
-☁️ Deploy en Streamlit Cloud
+```
+## ☁️ Deploy en Streamlit Cloud
 
 1.Subir el proyecto a GitHub
 
@@ -92,7 +96,7 @@ DATABASE_URL = "..."
 4.Asegurarse de tener runtime.txt en la raíz:
 python-3.12.8
 
-🔒 Seguridad
+## 🔒 Seguridad
 
 - .streamlit/secrets.toml está en .gitignore
 
@@ -100,7 +104,7 @@ python-3.12.8
 
 - Conexión a DB siempre con SSL
 
-📌 Roadmap / Mejoras futuras
+## 📌 Roadmap / Mejoras futuras
 
 📊 Historial de cotizaciones
 
@@ -114,12 +118,13 @@ python-3.12.8
 
 🎨 Personalización visual por cliente
 
-👨‍💻 Autor
+## 👨‍💻 Autor
 HIDRACODE SOLUTIONS
 Diseño + Tecnología para pymes
 
-📄 Licencia
+## 📄 Licencia
 Proyecto de uso interno.
 Todos los derechos reservados.
+
 
 
